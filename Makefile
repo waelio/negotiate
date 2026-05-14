@@ -1,4 +1,4 @@
-.PHONY: setup dev test demo health
+.PHONY: setup dev test demo health package package-check publish-test
 
 PYTHON := .venv/bin/python3
 PIP := .venv/bin/pip
@@ -19,3 +19,15 @@ health:
 
 demo:
 	$(CLI) demo-cycle
+
+package:
+	$(PIP) install build
+	$(PYTHON) -m build
+
+package-check:
+	$(PIP) install twine
+	$(PYTHON) -m twine check dist/*
+
+publish-test:
+	$(PIP) install twine
+	$(PYTHON) -m twine upload --repository testpypi dist/*

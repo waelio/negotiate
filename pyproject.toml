@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "waelio-negotiate"
+version = "0.1.0"
+description = "Markdown-backed FastAPI service for two-AI prompt negotiation sessions"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "Waelio", email = "waelio@waelio.com" }
+]
+dependencies = [
+  "fastapi==0.116.0",
+  "uvicorn[standard]==0.33.0",
+  "python-dotenv==1.1.0",
+  "PyYAML==6.0.2"
+]
+keywords = ["fastapi", "ai", "negotiation", "markdown", "session"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Framework :: FastAPI",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+
+[project.urls]
+Homepage = "https://github.com/waelio/negotiate"
+Repository = "https://github.com/waelio/negotiate"
+Issues = "https://github.com/waelio/negotiate/issues"
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.4.0",
+  "httpx==0.28.1",
+  "build>=1.2.2",
+  "twine>=5.1.1"
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]

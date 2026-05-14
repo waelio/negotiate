@@ -176,3 +176,58 @@ Files are written to:
 - `data/sessions/{session_id}.md` — session frontmatter + summary
 - `data/sessions/{session_id}/prompt_a.md` — authenticated prompt A text
 - `data/sessions/{session_id}/prompt_b.md` — authenticated prompt B text
+
+## Publishing this repository
+
+This repository now supports **two publish paths**:
+
+1. npm wrapper package (`@waelio/negotiate`)
+2. Python package (`waelio-negotiate`)
+
+### npm publish path (`@waelio/negotiate`)
+
+The npm package is a wrapper CLI that provides:
+
+- `negotiate serve`
+- `negotiate health`
+- `negotiate demo`
+- `negotiate py-cli ...`
+
+From the repo root:
+
+1. Dry-run npm publish:
+
+- `npm publish --dry-run`
+
+2. Publish to npm:
+
+- `npm publish --access public`
+
+After install (`npm i -g @waelio/negotiate`), use:
+
+- `negotiate help`
+- `negotiate serve --host 127.0.0.1 --port 8000`
+- `negotiate health --base-url http://127.0.0.1:8000`
+- `negotiate demo --base-url http://127.0.0.1:8000`
+
+### Python publish path (`waelio-negotiate`)
+
+Use Python packaging (`pyproject.toml`) + PyPI/TestPyPI.
+
+From the repo root:
+
+1. Build package artifacts:
+
+- `make package`
+
+2. Validate package metadata:
+
+- `make package-check`
+
+3. Optional test publish:
+
+- `make publish-test`
+
+For production PyPI publishing, use Twine in your authenticated environment:
+
+- `python3 -m twine upload dist/*`
