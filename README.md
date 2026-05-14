@@ -28,6 +28,43 @@ Example run target:
 - host: `0.0.0.0`
 - port: `8000`
 
+## Quickstart (usable command line)
+
+Use these commands from the project root:
+
+1. Setup local environment and dependencies:
+
+- `make setup`
+
+2. Start dev server:
+
+- `make dev`
+
+3. In another terminal, confirm health:
+
+- `make health`
+
+4. Run one full end-to-end negotiation cycle:
+
+- `make demo`
+
+5. Run tests:
+
+- `make test`
+
+CLI script entrypoint:
+
+- `scripts/negotiate_cli.py`
+
+Supported CLI commands:
+
+- `python3 scripts/negotiate_cli.py health`
+- `python3 scripts/negotiate_cli.py demo-cycle`
+
+Optional base URL override:
+
+- `python3 scripts/negotiate_cli.py --base-url http://127.0.0.1:8000 health`
+
 ## API
 
 ### Health check
