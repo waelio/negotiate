@@ -60,10 +60,33 @@ Supported CLI commands:
 
 - `python3 scripts/negotiate_cli.py health`
 - `python3 scripts/negotiate_cli.py demo-cycle`
+- `python3 scripts/negotiate_cli.py kickoff --prompt-text "..." --goal "..."`
+- `python3 scripts/negotiate_cli.py auth <session_id> prompt_b --shared-secret "..." --prompt-text "..."`
+- `python3 scripts/negotiate_cli.py status <session_id>`
+- `python3 scripts/negotiate_cli.py handoff-get <session_id>`
+- `python3 scripts/negotiate_cli.py handoff-save <session_id> --goal "..." --current-status "..." --last-successful-step "..." --current-blocker "..." --next-exact-step "..." --paste-ready-inputs "..."`
 
 Optional base URL override:
 
 - `python3 scripts/negotiate_cli.py --base-url http://127.0.0.1:8000 health`
+
+Example full cycle with the enhanced existing CLI:
+
+1. Kickoff with prompt A:
+
+- `python3 scripts/negotiate_cli.py kickoff --prompt-text "Prompt A opens with proposal" --goal "Reach agreement"`
+
+2. Authenticate prompt B with returned values:
+
+- `python3 scripts/negotiate_cli.py auth <session_id> prompt_b --shared-secret "<shared_secret>" --prompt-text "Prompt B counter-offer"`
+
+3. Read completion status:
+
+- `python3 scripts/negotiate_cli.py status <session_id>`
+
+4. Read shared handoff markdown:
+
+- `python3 scripts/negotiate_cli.py handoff-get <session_id>`
 
 ## API
 
