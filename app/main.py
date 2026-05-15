@@ -10,6 +10,15 @@ from pydantic import BaseModel, Field
 
 from app.storage import MarkdownSessionStore
 
+try:
+    from google.adk.agents.llm_agent import Agent
+    ai_agent = Agent(
+        name="negotiator",
+        model="gemini-flash-latest",
+        instruction="You are a tough negotiator representing Prompt B. Read the opening offer from Prompt A and respond with a counter-offer or acceptance. Be concise and realistic.",
+    )
+except ImportError:
+    ai_agent = None
 
 load_dotenv()
 
@@ -133,6 +142,47 @@ def kickoff_negotiation(payload: KickoffNegotiationRequest) -> KickoffNegotiatio
         completed_at=kicked_off.completed_at,
         handoff_saved=True,
     )
+
+
+@app.post("/sessions/kickoff-agent", response_model=SessionStatusResponse)
+def kickoff_with_agent(payload: KickoffNegotiationRequest) -> SessionStatusResponse:
+    if ai_agent is None:
+        raise HTTPException(status_code=500, detail="google-adk is not installed or configured")
+
+    session, shared_secret = store.create_session()
+
+    # 1. Prompt A opens
+    store.authenticate_prompt(
+        session_id=session.session_id,
+        role="prompt_a",
+        prompt_text=payload.prompt_text,
+        shared_secret=shared_secret,
+    )
+
+    # 2. AI (Prompt B) thinks
+    # The ADK agent handles the generation
+    ai_response = ai_agent(payload.prompt_text)
+    prompt_b_text = str(ai_response) if ai_response else "I accept your terms."
+
+    # 3. Prompt B responds
+    completed_session = store.authenticate_prompt(
+        session_id=session.session_id,
+        role="prompt_b",
+        prompt_text=prompt_b_text,
+        shared_secret=shared_secret,
+    )
+
+    store.save_handoff(
+        session.session_id,
+        goal=payload.goal,
+        current_status="Agent automatically negotiated and responded.",
+        last_successful_step="Agent B generated a response.",
+        current_blocker="none",
+        next_exact_step="Review the negotiation results",
+        paste_ready_inputs="",
+    )
+
+    return SessionStatusResponse(**completed_session.__dict__)
 
 
 @app.post("/sessions/{session_id}/prompts/{role}", response_model=SessionStatusResponse)
