@@ -6,3 +6,5 @@ data/
 node_modules/
 package-lock.json
 dist/
+node_modules/
+.venv/

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Negotiate — AI vs AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --card: #1a1a28;
+    --border: #2a2a40;
+    --a-color: #6366f1;
+    --a-glow: #6366f130;
+    --b-color: #f43f5e;
+    --b-glow: #f43f5e30;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --success: #22c55e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    width: 100%;
+    padding: 1.5rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+  header h1 span { color: var(--a-color); }
+  .badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 99px;
+    background: var(--a-glow);
+    color: var(--a-color);
+    border: 1px solid var(--a-color)44;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .api-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+  .api-row label { font-size: 0.75rem; color: var(--muted); }
+  .api-row input {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    width: 280px;
+    font-family: monospace;
+  }
+
+  main {
+    width: 100%;
+    max-width: 1200px;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .setup-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .setup-card h2 { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .field-row { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 200px; }
+  .field label { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
+  .field input, .field textarea {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    padding: 0.6rem 0.9rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    resize: vertical;
+  }
+  .field input:focus, .field textarea:focus { outline: none; border-color: var(--a-color); }
+
+  .btn {
+    padding: 0.75rem 1.75rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--a-color), #818cf8);
+    color: #fff;
+    box-shadow: 0 0 24px var(--a-glow);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 32px var(--a-glow); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--a-color); }
+  .btn-danger {
+    background: var(--b-glow);
+    color: var(--b-color);
+    border: 1px solid var(--b-color)44;
+  }
+  .btn-danger:hover { background: var(--b-color)22; }
+
+  .arena {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  @media (max-width: 700px) { .arena { grid-template-columns: 1fr; } }
+
+  .agent-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
+  }
+  .agent-panel.a { border-color: var(--a-color)44; }
+  .agent-panel.b { border-color: var(--b-color)44; }
+
+  .agent-header {
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .agent-panel.a .agent-header { background: linear-gradient(135deg, var(--a-glow), transparent); }
+  .agent-panel.b .agent-header { background: linear-gradient(135deg, var(--b-glow), transparent); }
+
+  .agent-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .agent-panel.a .agent-avatar { background: var(--a-color); color: #fff; box-shadow: 0 0 12px var(--a-glow); }
+  .agent-panel.b .agent-avatar { background: var(--b-color); color: #fff; box-shadow: 0 0 12px var(--b-glow); }
+
+  .agent-info h3 { font-size: 0.95rem; font-weight: 600; }
+  .agent-info p { font-size: 0.75rem; color: var(--muted); }
+
+  .agent-status {
+    margin-left: auto;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: background 0.3s;
+  }
+  .agent-status.thinking { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: pulse 1s infinite; }
+  .agent-status.done { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .messages {
+    flex: 1;
+    padding: 1.25rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .message {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    border: 1px solid var(--border);
+    animation: fadeUp 0.3s ease;
+  }
+  .agent-panel.a .message { border-left: 3px solid var(--a-color); }
+  .agent-panel.b .message { border-left: 3px solid var(--b-color); }
+  .message .round-tag { font-size: 0.65rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.4rem; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .thinking-indicator {
+    display: flex; gap: 4px; align-items: center; padding: 0.75rem;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite; }
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,80%,100% { transform: scale(0.8); opacity: 0.5; } 40% { transform: scale(1.2); opacity: 1; } }
+
+  .controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .session-info {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    font-size: 0.8rem;
+    display: none;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .session-info.visible { display: flex; }
+  .session-info .info-item { display: flex; flex-direction: column; gap: 0.2rem; }
+  .session-info .info-item span:first-child { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .session-info .info-item span:last-child { font-family: monospace; color: var(--text); }
+
+  .rounds-badge {
+    margin-left: auto;
+    background: var(--success)22;
+    color: var(--success);
+    border: 1px solid var(--success)44;
+    border-radius: 99px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--muted);
+    padding: 2rem;
+    text-align: center;
+  }
+  .empty-state .icon { font-size: 2rem; opacity: 0.4; }
+  .empty-state p { font-size: 0.8rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ <span>Negotiate</span></h1>
+  <span class="badge">AI × AI</span>
+  <div class="api-row">
+    <label>Worker URL</label>
+    <input id="apiUrl" type="text" placeholder="https://negotiate-api.waelio.workers.dev" value="https://negotiate-api.waelio.workers.dev"/>
+  </div>
+</header>
+
+<main>
+  <!-- Setup -->
+  <div class="setup-card">
+    <h2>Negotiation Setup</h2>
+    <div class="field-row">
+      <div class="field" style="flex:2">
+        <label>Topic / Goal</label>
+        <input id="goal" type="text" placeholder="e.g. Salary negotiation for a senior engineer role — target $180k" value="Salary negotiation: candidate wants $180k, company wants to pay $150k"/>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Agent A Persona</label>
+        <textarea id="personaA" rows="2">You are Agent A, a job candidate negotiating salary. You want $180k. Make a confident opening offer and justify it with market data. Be professional and concise.</textarea>
+      </div>
+      <div class="field">
+        <label>Agent B Persona</label>
+        <textarea id="personaB" rows="2">You are Agent B, an HR manager with a budget of $155k. Counter Agent A's offer with a firm but fair counter-proposal. Be professional and concise.</textarea>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn btn-primary" id="startBtn" onclick="startNegotiation()">
+        <span>▶</span> Start Negotiation
+      </button>
+      <button class="btn btn-secondary" id="continueBtn" onclick="continueNegotiation()" disabled>
+        ↩ Continue Round
+      </button>
+      <button class="btn btn-danger" onclick="resetAll()">✕ Reset</button>
+      <span id="roundsBadge" class="rounds-badge" style="display:none">Round 1</span>
+    </div>
+  </div>
+
+  <!-- Session info strip -->
+  <div class="session-info" id="sessionInfo">
+    <div class="info-item"><span>Session ID</span><span id="infoSessionId">—</span></div>
+    <div class="info-item"><span>Status</span><span id="infoStatus">—</span></div>
+    <div class="info-item"><span>Completed</span><span id="infoCompleted">—</span></div>
+  </div>
+
+  <!-- Arena -->
+  <div class="arena">
+    <div class="agent-panel a">
+      <div class="agent-header">
+        <div class="agent-avatar">A</div>
+        <div class="agent-info">
+          <h3>Agent A</h3>
+          <p id="roleA">Proposer</p>
+        </div>
+        <div class="agent-status" id="statusA"></div>
+      </div>
+      <div class="messages" id="messagesA">
+        <div class="empty-state">
+          <div class="icon">🤖</div>
+          <p>Agent A will open the negotiation</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent-panel b">
+      <div class="agent-header">
+        <div class="agent-avatar">B</div>
+        <div class="agent-info">
+          <h3>Agent B</h3>
+          <p id="roleB">Counter-party</p>
+        </div>
+        <div class="agent-status" id="statusB"></div>
+      </div>
+      <div class="messages" id="messagesB">
+        <div class="empty-state">
+          <div class="icon">🤖</div>
+          <p>Agent B will respond to Agent A</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  let currentSessionId = null;
+  let currentSecret = null;
+  let round = 0;
+
+  function apiUrl() {
+    const v = document.getElementById('apiUrl').value.trim();
+    return v || 'http://localhost:8787';
+  }
+
+  function setStatus(agent, state) {
+    // state: '' | 'thinking' | 'done'
+    const el = document.getElementById(`status${agent}`);
+    el.className = 'agent-status ' + state;
+  }
+
+  function addMessage(panel, text, roundNum) {
+    const container = document.getElementById(`messages${panel}`);
+    // Remove empty state if present
+    const empty = container.querySelector('.empty-state');
+    if (empty) empty.remove();
+
+    const msg = document.createElement('div');
+    msg.className = 'message';
+    msg.innerHTML = `<div class="round-tag">Round ${roundNum}</div>${escHtml(text)}`;
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function showThinking(panel) {
+    const container = document.getElementById(`messages${panel}`);
+    const empty = container.querySelector('.empty-state');
+    if (empty) empty.remove();
+
+    const ind = document.createElement('div');
+    ind.className = 'thinking-indicator';
+    ind.id = `thinking${panel}`;
+    ind.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+    container.appendChild(ind);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function hideThinking(panel) {
+    const el = document.getElementById(`thinking${panel}`);
+    if (el) el.remove();
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  }
+
+  function setRound(n) {
+    round = n;
+    const badge = document.getElementById('roundsBadge');
+    badge.style.display = 'inline-flex';
+    badge.textContent = `Round ${n}`;
+  }
+
+  function updateSessionInfo(data) {
+    document.getElementById('sessionInfo').classList.add('visible');
+    document.getElementById('infoSessionId').textContent = data.session_id ?? '—';
+    document.getElementById('infoStatus').textContent = data.completed_at ? 'Complete' : 'In Progress';
+    document.getElementById('infoCompleted').textContent = data.completed_at ? new Date(data.completed_at).toLocaleTimeString() : '—';
+  }
+
+  async function startNegotiation() {
+    const goal = document.getElementById('goal').value.trim();
+    const personaA = document.getElementById('personaA').value.trim();
+    const personaB = document.getElementById('personaB').value.trim();
+
+    if (!goal) { alert('Please enter a negotiation goal.'); return; }
+
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('continueBtn').disabled = true;
+
+    // Clear panels
+    document.getElementById('messagesA').innerHTML = '';
+    document.getElementById('messagesB').innerHTML = '';
+
+    setStatus('A', 'thinking');
+    showThinking('A');
+
+    try {
+      const res = await fetch(`${apiUrl()}/negotiate/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal, agent_a_persona: personaA, agent_b_persona: personaB }),
+      });
+
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.detail ?? `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      hideThinking('A');
+      setStatus('A', 'done');
+      addMessage('A', data.agent_a, 1);
+
+      setStatus('B', 'thinking');
+      showThinking('B');
+      // Slight delay for visual effect
+      await new Promise(r => setTimeout(r, 400));
+      hideThinking('B');
+      setStatus('B', 'done');
+      addMessage('B', data.agent_b, 1);
+
+      currentSessionId = data.session_id;
+      currentSecret = data.shared_secret;
+      setRound(1);
+      updateSessionInfo(data);
+
+      document.getElementById('continueBtn').disabled = false;
+    } catch (e) {
+      hideThinking('A');
+      hideThinking('B');
+      setStatus('A', '');
+      setStatus('B', '');
+      alert(`Error: ${e.message}`);
+    }
+
+    document.getElementById('startBtn').disabled = false;
+  }
+
+  async function continueNegotiation() {
+    if (!currentSessionId) return;
+    const personaA = document.getElementById('personaA').value.trim();
+    const personaB = document.getElementById('personaB').value.trim();
+
+    document.getElementById('continueBtn').disabled = true;
+    document.getElementById('startBtn').disabled = true;
+
+    setStatus('A', 'thinking');
+    showThinking('A');
+
+    try {
+      const res = await fetch(`${apiUrl()}/negotiate/auto/${currentSessionId}/continue`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shared_secret: currentSecret,
+          agent_a_persona: personaA,
+          agent_b_persona: personaB,
+        }),
+      });
+
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.detail ?? `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const newRound = round + 1;
+
+      hideThinking('A');
+      setStatus('A', 'done');
+      addMessage('A', data.agent_a, newRound);
+
+      setStatus('B', 'thinking');
+      showThinking('B');
+      await new Promise(r => setTimeout(r, 400));
+      hideThinking('B');
+      setStatus('B', 'done');
+      addMessage('B', data.agent_b, newRound);
+
+      setRound(newRound);
+      updateSessionInfo(data);
+    } catch(e) {
+      hideThinking('A');
+      hideThinking('B');
+      setStatus('A', '');
+      setStatus('B', '');
+      alert(`Error: ${e.message}`);
+    }
+
+    document.getElementById('continueBtn').disabled = false;
+    document.getElementById('startBtn').disabled = false;
+  }
+
+  function resetAll() {
+    currentSessionId = null;
+    currentSecret = null;
+    round = 0;
+    document.getElementById('messagesA').innerHTML = '<div class="empty-state"><div class="icon">🤖</div><p>Agent A will open the negotiation</p></div>';
+    document.getElementById('messagesB').innerHTML = '<div class="empty-state"><div class="icon">🤖</div><p>Agent B will respond to Agent A</p></div>';
+    document.getElementById('sessionInfo').classList.remove('visible');
+    document.getElementById('roundsBadge').style.display = 'none';
+    document.getElementById('continueBtn').disabled = true;
+    document.getElementById('startBtn').disabled = false;
+    setStatus('A', '');
+    setStatus('B', '');
+  }
+
+  // Pre-fill API URL from localStorage if saved
+  const saved = localStorage.getItem('negotiate_api_url');
+  if (saved) document.getElementById('apiUrl').value = saved;
+  document.getElementById('apiUrl').addEventListener('input', e => {
+    localStorage.setItem('negotiate_api_url', e.target.value);
+  });
+</script>
+</body>
+</html>

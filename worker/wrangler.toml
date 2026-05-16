@@ -1,0 +1,14 @@
+name = "negotiate-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "c002479c0bdb40a59ae2e2ef6230a77d"
+preview_id = "c002479c0bdb40a59ae2e2ef6230a77d"
+
+[ai]
+binding = "AI"
+
+[vars]
+CORS_ORIGIN = "*"

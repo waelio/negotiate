@@ -1,0 +1,16 @@
+{
+  "name": "negotiate-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "kv:create": "wrangler kv namespace create SESSIONS",
+    "kv:create:preview": "wrangler kv namespace create SESSIONS --preview"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250515.0",
+    "typescript": "^5.0.0",
+    "wrangler": "^4.0.0"
+  }
+}
