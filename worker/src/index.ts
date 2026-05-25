@@ -53,6 +53,7 @@ interface SessionRecord {
   completed_at: string | null;
   prompt_a_text?: string;
   prompt_b_text?: string;
+  negotiation?: NegotiationState;
 }
 
 interface HandoffRecord {
@@ -64,6 +65,38 @@ interface HandoffRecord {
   current_blocker: string;
   next_exact_step: string;
   paste_ready_inputs: string;
+}
+
+interface NegotiationTerm {
+  label: string;
+  agent_a_position: string;
+  agent_b_position: string;
+  priority: string;
+}
+
+interface NegotiationTurn {
+  round: number;
+  agent_a: string;
+  agent_b: string;
+  created_at: string;
+}
+
+interface NegotiationState {
+  goal: string;
+  terms: NegotiationTerm[];
+  agent_a_persona: string;
+  agent_b_persona: string;
+  opening: string;
+  history: NegotiationTurn[];
+  rounds: number;
+}
+
+interface AutoNegotiationBody {
+  goal?: string;
+  agent_a_persona?: string;
+  agent_b_persona?: string;
+  opening?: string;
+  terms?: Partial<NegotiationTerm>[];
 }
 
 // ── Crypto helpers ────────────────────────────────────────────────────────────
@@ -168,7 +201,78 @@ function sessionStatus(s: SessionRecord) {
     completed_at: s.completed_at ?? null,
     prompt_a_text: s.prompt_a_text ?? null,
     prompt_b_text: s.prompt_b_text ?? null,
+    negotiation: s.negotiation ?? null,
   };
+}
+
+// ── Negotiation helpers ───────────────────────────────────────────────────────
+
+function normalizeTerms(goal: string, terms?: Partial<NegotiationTerm>[]): NegotiationTerm[] {
+  const cleaned = (terms ?? [])
+    .map((term) => ({
+      label: term.label?.trim() ?? "",
+      agent_a_position: term.agent_a_position?.trim() ?? "",
+      agent_b_position: term.agent_b_position?.trim() ?? "",
+      priority: term.priority?.trim() ?? "",
+    }))
+    .filter((term) => term.label || term.agent_a_position || term.agent_b_position);
+
+  if (cleaned.length > 0) {
+    return cleaned.map((term, index) => ({
+      label: term.label || `Term ${index + 1}`,
+      agent_a_position: term.agent_a_position || "State a concrete preferred outcome and fallback.",
+      agent_b_position: term.agent_b_position || "State a concrete preferred outcome and fallback.",
+      priority: term.priority || "medium",
+    }));
+  }
+
+  return [
+    {
+      label: "Core agreement",
+      agent_a_position: goal,
+      agent_b_position: goal,
+      priority: "high",
+    },
+  ];
+}
+
+function buildTermBrief(goal: string, terms: NegotiationTerm[]): string {
+  const termLines = terms
+    .map(
+      (term, index) =>
+        `${index + 1}. ${term.label} (priority: ${term.priority})\n` +
+        `   Agent A wants: ${term.agent_a_position}\n` +
+        `   Agent B wants: ${term.agent_b_position}`
+    )
+    .join("\n");
+
+  return `Goal: ${goal}\n\nNegotiable terms:\n${termLines}`;
+}
+
+function buildHistoryTranscript(history: NegotiationTurn[]): string {
+  if (history.length === 0) {
+    return "No previous rounds.";
+  }
+
+  return history
+    .map(
+      (turn) =>
+        `Round ${turn.round}\nAgent A: ${turn.agent_a}\nAgent B: ${turn.agent_b}`
+    )
+    .join("\n\n");
+}
+
+function realisticNegotiatorPrompt(persona: string, side: "A" | "B"): string {
+  const counterpart = side === "A" ? "Agent B" : "Agent A";
+  return `${persona}
+
+You are negotiating like a real person with incentives, tradeoffs, and limits.
+- Make specific offers with numbers, dates, quantities, scope, or other concrete terms when possible.
+- Do not simply agree unless the current terms satisfy your stated interests.
+- If you concede, ask for something in return and explain the tradeoff in one sentence.
+- If the other side's offer violates a hard constraint, reject that term and provide a realistic counter.
+- You may accept, counter-offer, ask one clarifying question, or walk away.
+- Keep the response concise, but include enough detail for ${counterpart} to evaluate the offer.`;
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
@@ -385,16 +489,18 @@ export default {
 
     // POST /negotiate/auto — Agent A proposes, Agent B counters, fully automated
     if (method === "POST" && path === "/negotiate/auto") {
-      let body: { goal?: string; agent_a_persona?: string; agent_b_persona?: string; opening?: string };
+      let body: AutoNegotiationBody;
       try {
         body = await request.json();
       } catch {
         return err("Invalid JSON body");
       }
-      const goal = body.goal ?? "Reach a mutually beneficial agreement";
-      const personaA = body.agent_a_persona ?? "You are Agent A, a firm but fair negotiator. Make a clear opening proposal.";
-      const personaB = body.agent_b_persona ?? "You are Agent B, a tough negotiator. Read the proposal and counter-offer or accept. Be concise.";
-      const opening = body.opening ?? `Let's negotiate about: ${goal}. I'll start with my opening proposal.`;
+      const goal = body.goal?.trim() || "Reach a mutually beneficial agreement";
+      const personaA = body.agent_a_persona?.trim() || "You are Agent A, a firm but fair negotiator. Make a clear opening proposal.";
+      const personaB = body.agent_b_persona?.trim() || "You are Agent B, a tough negotiator. Read the proposal and counter-offer or accept. Be concise.";
+      const opening = body.opening?.trim() || `Let's negotiate about: ${goal}. I'll start with my opening proposal.`;
+      const terms = normalizeTerms(goal, body.terms);
+      const termBrief = buildTermBrief(goal, terms);
 
       // Create session
       const session_id = randomHex(16);
@@ -404,7 +510,15 @@ export default {
       const secret_hash = await hashSecret(shared_secret, secret_salt, masterKey);
 
       // Agent A generates its opening
-      const agentAText = await askAgent(env.AI, personaA, `Goal: ${goal}\n\n${opening}`);
+      const agentAText = await askAgent(
+        env.AI,
+        realisticNegotiatorPrompt(personaA, "A"),
+        `${termBrief}
+
+Opening instruction: ${opening}
+
+Your turn as Agent A: make a concrete opening offer across the important terms.`
+      );
 
       const session: SessionRecord = {
         session_id, created_at, secret_hash, secret_salt,
@@ -418,21 +532,42 @@ export default {
       // Agent B responds
       const agentBText = await askAgent(
         env.AI,
-        personaB,
-        `Goal: ${goal}\n\nAgent A's proposal: ${agentAText}`
+        realisticNegotiatorPrompt(personaB, "B"),
+        `${termBrief}
+
+Agent A's opening proposal:
+${agentAText}
+
+Your turn as Agent B: accept only if the offer meets your interests; otherwise counter with concrete terms.`
       );
 
       session.prompt_b_authenticated = true;
       session.prompt_b_text = agentBText;
       session.completed_at = new Date().toISOString();
+      session.negotiation = {
+        goal,
+        terms,
+        agent_a_persona: personaA,
+        agent_b_persona: personaB,
+        opening,
+        history: [
+          {
+            round: 1,
+            agent_a: agentAText,
+            agent_b: agentBText,
+            created_at: session.completed_at,
+          },
+        ],
+        rounds: 1,
+      };
       await putSession(env.SESSIONS, session);
 
       const handoff: HandoffRecord = {
         session_id,
         updated_at: new Date().toISOString(),
         goal,
-        current_status: "Both agents have exchanged opening positions.",
-        last_successful_step: "Agent B responded to Agent A's proposal.",
+        current_status: "Both agents exchanged concrete opening positions using the editable deal terms.",
+        last_successful_step: "Agent B responded to Agent A's proposal with a realistic accept/counter decision.",
         current_blocker: "none",
         next_exact_step: `Continue negotiation at POST /negotiate/auto/${session_id}/continue`,
         paste_ready_inputs: `session_id=${session_id}\nshared_secret=${shared_secret}`,
@@ -446,6 +581,7 @@ export default {
         agent_b: agentBText,
         completed_at: session.completed_at,
         rounds: 1,
+        negotiation: session.negotiation,
       });
     }
 
@@ -456,32 +592,94 @@ export default {
       const session = await getSession(env.SESSIONS, session_id);
       if (!session) return err("Session not found", 404);
 
-      let body: { agent_a_persona?: string; agent_b_persona?: string; shared_secret?: string };
+      let body: AutoNegotiationBody & { shared_secret?: string };
       try { body = await request.json(); } catch { return err("Invalid JSON body"); }
 
-      const personaA = body.agent_a_persona ?? "You are Agent A. Review Agent B's counter-offer and respond — accept, counter, or walk away. Be concise.";
-      const personaB = body.agent_b_persona ?? "You are Agent B. Review Agent A's response and counter or accept. Be concise.";
+      if (body.shared_secret) {
+        const candidate = await hashSecret(body.shared_secret, session.secret_salt, masterKey);
+        if (!secureCompare(candidate, session.secret_hash)) {
+          return err("Invalid shared secret for this session", 401);
+        }
+      }
 
-      const prevA = session.prompt_a_text ?? "";
-      const prevB = session.prompt_b_text ?? "";
+      const priorState = session.negotiation;
+      const goal = body.goal?.trim() || priorState?.goal || "Reach a mutually beneficial agreement";
+      const personaA =
+        body.agent_a_persona?.trim() ||
+        priorState?.agent_a_persona ||
+        "You are Agent A. Review Agent B's counter-offer and respond — accept, counter, or walk away. Be concise.";
+      const personaB =
+        body.agent_b_persona?.trim() ||
+        priorState?.agent_b_persona ||
+        "You are Agent B. Review Agent A's response and counter or accept. Be concise.";
+      const opening = body.opening?.trim() || priorState?.opening || `Continue negotiating about: ${goal}.`;
+      const terms = normalizeTerms(goal, body.terms ?? priorState?.terms);
+      const history =
+        priorState?.history ??
+        (session.prompt_a_text || session.prompt_b_text
+          ? [
+              {
+                round: 1,
+                agent_a: session.prompt_a_text ?? "",
+                agent_b: session.prompt_b_text ?? "",
+                created_at: session.completed_at ?? session.created_at,
+              },
+            ]
+          : []);
+      const nextRound = history.length + 1;
+      const termBrief = buildTermBrief(goal, terms);
+      const transcript = buildHistoryTranscript(history);
 
       // Agent A responds to B's last counter
       const newA = await askAgent(
         env.AI,
-        personaA,
-        `Previous exchange:\nAgent A: ${prevA}\nAgent B: ${prevB}\n\nYour turn — respond to Agent B's counter:`
+        realisticNegotiatorPrompt(personaA, "A"),
+        `${termBrief}
+
+Negotiation history:
+${transcript}
+
+Your turn as Agent A in round ${nextRound}: respond to Agent B's latest position. Accept only if your interests are met; otherwise counter with concrete concessions or a walk-away condition.`
       );
 
       // Agent B counters again
       const newB = await askAgent(
         env.AI,
-        personaB,
-        `Previous exchange:\nAgent A: ${prevA}\nAgent B: ${prevB}\nAgent A follow-up: ${newA}\n\nYour response:`
+        realisticNegotiatorPrompt(personaB, "B"),
+        `${termBrief}
+
+Negotiation history:
+${transcript}
+
+Agent A's round ${nextRound} response:
+${newA}
+
+Your turn as Agent B in round ${nextRound}: accept only if Agent A's terms meet your interests; otherwise counter with concrete concessions or a walk-away condition.`
       );
+
+      const completedAt = new Date().toISOString();
+      const nextHistory = [
+        ...history,
+        {
+          round: nextRound,
+          agent_a: newA,
+          agent_b: newB,
+          created_at: completedAt,
+        },
+      ];
 
       session.prompt_a_text = newA;
       session.prompt_b_text = newB;
-      session.completed_at = new Date().toISOString();
+      session.completed_at = completedAt;
+      session.negotiation = {
+        goal,
+        terms,
+        agent_a_persona: personaA,
+        agent_b_persona: personaB,
+        opening,
+        history: nextHistory,
+        rounds: nextRound,
+      };
       await putSession(env.SESSIONS, session);
 
       return json({
@@ -489,6 +687,8 @@ export default {
         agent_a: newA,
         agent_b: newB,
         completed_at: session.completed_at,
+        rounds: nextRound,
+        negotiation: session.negotiation,
       });
     }
 
