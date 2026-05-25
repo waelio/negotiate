@@ -106,6 +106,8 @@
     resize: vertical;
   }
   .field input:focus, .field textarea:focus { outline: none; border-color: var(--a-color); }
+  .field .hint { font-size: 0.7rem; color: var(--muted); line-height: 1.4; }
+  .terms-field textarea { min-height: 96px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 
   .btn {
     padding: 0.75rem 1.75rem;
@@ -301,6 +303,15 @@
       </div>
     </div>
     <div class="field-row">
+      <div class="field terms-field" style="flex:2">
+        <label>Editable Deal Terms</label>
+        <textarea id="terms" rows="4" placeholder="Label | Agent A wants | Agent B wants | Priority">Salary | $180k base | Max $155k base | high
+Signing bonus | $20k if base is below target | $5k if needed to close | medium
+Start date | 4 weeks after signing | 2 weeks after signing | low</textarea>
+        <div class="hint">One term per line: label | Agent A position | Agent B position | priority. Edit these before starting or between rounds.</div>
+      </div>
+    </div>
+    <div class="field-row">
       <div class="field">
         <label>Agent A Persona</label>
         <textarea id="personaA" rows="2">You are Agent A, a job candidate negotiating salary. You want $180k. Make a confident opening offer and justify it with market data. Be professional and concise.</textarea>
@@ -372,6 +383,8 @@
   let currentSecret = null;
   let round = 0;
 
+  const savedFields = ['goal', 'terms', 'personaA', 'personaB'];
+
   function apiUrl() {
     const v = document.getElementById('apiUrl').value.trim();
     return v || 'http://localhost:8787';
@@ -418,6 +431,22 @@
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
   }
 
+  function parseTerms() {
+    return document.getElementById('terms').value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map((line, index) => {
+        const parts = line.split('|').map(part => part.trim());
+        return {
+          label: parts[0] || `Term ${index + 1}`,
+          agent_a_position: parts[1] || '',
+          agent_b_position: parts[2] || '',
+          priority: parts[3] || 'medium',
+        };
+      });
+  }
+
   function setRound(n) {
     round = n;
     const badge = document.getElementById('roundsBadge');
@@ -428,7 +457,8 @@
   function updateSessionInfo(data) {
     document.getElementById('sessionInfo').classList.add('visible');
     document.getElementById('infoSessionId').textContent = data.session_id ?? '—';
-    document.getElementById('infoStatus').textContent = data.completed_at ? 'Complete' : 'In Progress';
+    const termsCount = data.negotiation?.terms?.length ?? parseTerms().length;
+    document.getElementById('infoStatus').textContent = data.rounds ? `Round ${data.rounds}, ${termsCount} terms` : 'In Progress';
     document.getElementById('infoCompleted').textContent = data.completed_at ? new Date(data.completed_at).toLocaleTimeString() : '—';
   }
 
@@ -436,8 +466,10 @@
     const goal = document.getElementById('goal').value.trim();
     const personaA = document.getElementById('personaA').value.trim();
     const personaB = document.getElementById('personaB').value.trim();
+    const terms = parseTerms();
 
     if (!goal) { alert('Please enter a negotiation goal.'); return; }
+    if (terms.length === 0) { alert('Please add at least one editable deal term.'); return; }
 
     document.getElementById('startBtn').disabled = true;
     document.getElementById('continueBtn').disabled = true;
@@ -453,7 +485,7 @@
       const res = await fetch(`${apiUrl()}/negotiate/auto`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal, agent_a_persona: personaA, agent_b_persona: personaB }),
+        body: JSON.stringify({ goal, terms, agent_a_persona: personaA, agent_b_persona: personaB }),
       });
 
       if (!res.ok) {
@@ -494,6 +526,8 @@
 
   async function continueNegotiation() {
     if (!currentSessionId) return;
+    const goal = document.getElementById('goal').value.trim();
+    const terms = parseTerms();
     const personaA = document.getElementById('personaA').value.trim();
     const personaB = document.getElementById('personaB').value.trim();
 
@@ -509,6 +543,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shared_secret: currentSecret,
+          goal,
+          terms,
           agent_a_persona: personaA,
           agent_b_persona: personaB,
         }),
@@ -566,6 +602,15 @@
   if (saved) document.getElementById('apiUrl').value = saved;
   document.getElementById('apiUrl').addEventListener('input', e => {
     localStorage.setItem('negotiate_api_url', e.target.value);
+  });
+
+  savedFields.forEach(id => {
+    const savedValue = localStorage.getItem(`negotiate_${id}`);
+    const el = document.getElementById(id);
+    if (savedValue) el.value = savedValue;
+    el.addEventListener('input', e => {
+      localStorage.setItem(`negotiate_${id}`, e.target.value);
+    });
   });
 </script>
 </body>
