@@ -171,7 +171,7 @@ async function putHandoff(kv: KVNamespace, handoff: HandoffRecord): Promise<void
 function corsHeaders(origin: string): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   };
 }
@@ -693,6 +693,36 @@ Your turn as Agent B in round ${nextRound}: accept only if Agent A's terms meet 
         rounds: nextRound,
         negotiation: session.negotiation,
       });
+    }
+
+    // PATCH /sessions/:id/context — update the negotiation context/goal
+    const contextMatch = path.match(/^\/sessions\/([^/]+)\/context$/);
+    if (method === "PATCH" && contextMatch) {
+      const session_id = contextMatch[1];
+      const session = await getSession(env.SESSIONS, session_id);
+      if (!session) return err("Session not found", 404);
+
+      let body: { context?: string; goal?: string };
+      try { body = await request.json(); } catch { return err("Invalid JSON body"); }
+
+      if (!body.context) return err("context is required");
+
+      const existing = await getHandoff(env.SESSIONS, session_id);
+      const currentGoal = body.goal ?? existing?.goal ?? "Updated by user";
+
+      const handoff: HandoffRecord = {
+        session_id,
+        updated_at: new Date().toISOString(),
+        goal: currentGoal,
+        current_status: `Context updated by user: ${body.context.slice(0, 120)}`,
+        last_successful_step: "User updated the negotiation context.",
+        current_blocker: "none",
+        next_exact_step: "Continue negotiation with the new context.",
+        paste_ready_inputs: `context=${body.context}`,
+      };
+      await putHandoff(env.SESSIONS, handoff);
+
+      return json({ status: "context updated", session_id });
     }
 
     return err("Not found", 404);
