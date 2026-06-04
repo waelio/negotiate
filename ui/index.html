@@ -333,6 +333,25 @@ Start date | 4 weeks after signing | 2 weeks after signing | low</textarea>
     </div>
   </div>
 
+  <!-- Change Context panel (shown after session starts) -->
+  <div class="setup-card" id="contextPanel" style="display:none">
+    <h2>🔄 Change Context Mid-Session</h2>
+    <div class="field-row">
+      <div class="field" style="flex:2">
+        <label>New Context / Instruction</label>
+        <textarea id="newContext" rows="2" placeholder="e.g. Both parties agree to focus only on equity, ignore salary for now..."></textarea>
+      </div>
+      <div class="field" style="flex:1">
+        <label>Updated Goal (optional)</label>
+        <input id="newGoal" type="text" placeholder="Leave blank to keep current goal"/>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn btn-primary" onclick="updateContext()">↺ Apply New Context</button>
+    </div>
+  </div>
+
+
   <!-- Session info strip -->
   <div class="session-info" id="sessionInfo">
     <div class="info-item"><span>Session ID</span><span id="infoSessionId">—</span></div>
@@ -511,6 +530,7 @@ Start date | 4 weeks after signing | 2 weeks after signing | low</textarea>
       currentSecret = data.shared_secret;
       setRound(1);
       updateSessionInfo(data);
+      document.getElementById('contextPanel').style.display = 'flex';
 
       document.getElementById('continueBtn').disabled = false;
     } catch (e) {
@@ -593,8 +613,35 @@ Start date | 4 weeks after signing | 2 weeks after signing | low</textarea>
     document.getElementById('roundsBadge').style.display = 'none';
     document.getElementById('continueBtn').disabled = true;
     document.getElementById('startBtn').disabled = false;
+    document.getElementById('contextPanel').style.display = 'none';
     setStatus('A', '');
     setStatus('B', '');
+  }
+
+  async function updateContext() {
+    if (!currentSessionId) return;
+    const context = document.getElementById('newContext').value.trim();
+    if (!context) { alert('Please enter a new context.'); return; }
+    const goal = document.getElementById('newGoal').value.trim() || undefined;
+
+    try {
+      const res = await fetch(`${apiUrl()}/sessions/${currentSessionId}/context`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context, ...(goal ? { goal } : {}) }),
+      });
+      if (!res.ok) {
+        const e = await res.json();
+        throw new Error(e.detail ?? `HTTP ${res.status}`);
+      }
+      document.getElementById('newContext').value = '';
+      document.getElementById('newGoal').value = '';
+      // Show confirmation in both panels
+      addMessage('A', `[Context updated] ${context}`, round);
+      addMessage('B', `[Context updated] ${context}`, round);
+    } catch(e) {
+      alert(`Error: ${e.message}`);
+    }
   }
 
   // Pre-fill API URL from localStorage if saved
