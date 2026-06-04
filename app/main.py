@@ -12,13 +12,20 @@ from app.storage import MarkdownSessionStore
 
 try:
     from google.adk.agents.llm_agent import Agent
-    ai_agent = Agent(
-        name="negotiator",
-        model="gemini-flash-latest",
-        instruction="You are a tough negotiator representing Prompt B. Read the opening offer from Prompt A and respond with a counter-offer or acceptance. Be concise and realistic.",
+    _DEFAULT_AGENT_INSTRUCTION = (
+        "You are a tough negotiator representing Prompt B. "
+        "Read the opening offer from Prompt A and respond with a counter-offer or acceptance. "
+        "Be concise and realistic."
     )
+    def _make_agent(instruction: str | None = None) -> "Agent":
+        return Agent(
+            name="negotiator",
+            model="gemini-flash-latest",
+            instruction=instruction or _DEFAULT_AGENT_INSTRUCTION,
+        )
 except ImportError:
-    ai_agent = None
+    _make_agent = None  # type: ignore
+    _DEFAULT_AGENT_INSTRUCTION = ""
 
 load_dotenv()
 
@@ -77,6 +84,10 @@ class KickoffNegotiationRequest(BaseModel):
         min_length=1,
     )
     paste_ready_inputs: str = Field(default="", min_length=0)
+    context: str | None = Field(
+        default=None,
+        description="Optional custom instruction for the AI agent. Overrides the default negotiator role.",
+    )
 
 
 class KickoffNegotiationResponse(BaseModel):
@@ -146,10 +157,11 @@ def kickoff_negotiation(payload: KickoffNegotiationRequest) -> KickoffNegotiatio
 
 @app.post("/sessions/kickoff-agent", response_model=SessionStatusResponse)
 def kickoff_with_agent(payload: KickoffNegotiationRequest) -> SessionStatusResponse:
-    if ai_agent is None:
+    if _make_agent is None:
         raise HTTPException(status_code=500, detail="google-adk is not installed or configured")
 
     session, shared_secret = store.create_session()
+    ai_agent = _make_agent(payload.context)
 
     # 1. Prompt A opens
     store.authenticate_prompt(
@@ -159,8 +171,7 @@ def kickoff_with_agent(payload: KickoffNegotiationRequest) -> SessionStatusRespo
         shared_secret=shared_secret,
     )
 
-    # 2. AI (Prompt B) thinks
-    # The ADK agent handles the generation
+    # 2. AI (Prompt B) thinks using user-provided context or default
     ai_response = ai_agent(payload.prompt_text)
     prompt_b_text = str(ai_response) if ai_response else "I accept your terms."
 
@@ -246,3 +257,34 @@ def get_handoff(session_id: str) -> HandoffResponse:
         updated_at=frontmatter.get("updated_at", ""),
         body=body,
     )
+
+
+class UpdateContextRequest(BaseModel):
+    context: str = Field(min_length=1, description="New instruction/context for the negotiation session.")
+    goal: str | None = Field(default=None, description="Optional updated goal for the session.")
+
+
+@app.patch("/sessions/{session_id}/context")
+def update_context(session_id: str, payload: UpdateContextRequest) -> dict[str, str]:
+    """Allow users to update the negotiation context/goal for an existing session."""
+    try:
+        # Read current handoff to preserve existing fields
+        try:
+            frontmatter, body = store.get_handoff(session_id)
+            current_goal = payload.goal or frontmatter.get("goal", "Updated by user")
+        except FileNotFoundError:
+            current_goal = payload.goal or "Updated by user"
+
+        store.save_handoff(
+            session_id,
+            goal=current_goal,
+            current_status=f"Context updated by user: {payload.context[:120]}",
+            last_successful_step="User updated the negotiation context.",
+            current_blocker="none",
+            next_exact_step="Continue negotiation with new context.",
+            paste_ready_inputs=f"context={payload.context}",
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return {"status": "context updated", "session_id": session_id}

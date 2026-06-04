@@ -79,17 +79,29 @@ def cmd_demo_cycle(base_url: str) -> int:
 
 
 def cmd_kickoff(args: argparse.Namespace) -> int:
+    body: dict = {
+        "prompt_text": args.prompt_text,
+        "goal": args.goal,
+        "current_blocker": args.current_blocker,
+        "next_exact_step": args.next_exact_step,
+        "paste_ready_inputs": args.paste_ready_inputs,
+    }
+    if args.context:
+        body["context"] = args.context
+    payload = _request(args.base_url, "POST", "/sessions/kickoff", body)
+    _print_json(payload)
+    return 0
+
+
+def cmd_update_context(args: argparse.Namespace) -> int:
+    body: dict = {"context": args.context}
+    if args.goal:
+        body["goal"] = args.goal
     payload = _request(
         args.base_url,
-        "POST",
-        "/sessions/kickoff",
-        {
-            "prompt_text": args.prompt_text,
-            "goal": args.goal,
-            "current_blocker": args.current_blocker,
-            "next_exact_step": args.next_exact_step,
-            "paste_ready_inputs": args.paste_ready_inputs,
-        },
+        "PATCH",
+        f"/sessions/{args.session_id}/context",
+        body,
     )
     _print_json(payload)
     return 0
@@ -157,6 +169,11 @@ def main() -> int:
         help="Next exact step",
     )
     kickoff_parser.add_argument("--paste-ready-inputs", default="", help="Optional handoff quick-copy inputs")
+    kickoff_parser.add_argument(
+        "--context",
+        default=None,
+        help="Custom context/instruction for the AI agent (overrides default negotiator role)",
+    )
 
     auth_parser = subparsers.add_parser("auth", help="Authenticate prompt_a or prompt_b")
     auth_parser.add_argument("session_id", help="Session ID")
@@ -179,6 +196,11 @@ def main() -> int:
     handoff_save_parser.add_argument("--next-exact-step", required=True, help="Next exact step")
     handoff_save_parser.add_argument("--paste-ready-inputs", required=True, help="Copy/paste-ready values")
 
+    update_context_parser = subparsers.add_parser("update-context", help="Update the negotiation context/instruction for a session")
+    update_context_parser.add_argument("session_id", help="Session ID")
+    update_context_parser.add_argument("--context", required=True, help="New context or instruction for the negotiation")
+    update_context_parser.add_argument("--goal", default=None, help="Optional updated goal")
+
     args = parser.parse_args()
 
     try:
@@ -196,6 +218,8 @@ def main() -> int:
             return cmd_handoff_get(args)
         if args.command == "handoff-save":
             return cmd_handoff_save(args)
+        if args.command == "update-context":
+            return cmd_update_context(args)
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 1
