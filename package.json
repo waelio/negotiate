@@ -1,11 +1,11 @@
 {
     "name": "@waelio/negotiate",
-    "version": "0.1.0",
-    "description": "NPM wrapper CLI for the waelio negotiate service",
+    "version": "0.2.0",
+    "description": "Let two AI agents negotiate autonomously — REST API, CLI, Cloudflare Worker, and live UI included",
     "type": "module",
     "license": "MIT",
     "author": "Waelio <waelio@waelio.com> (https://waelio.com)",
-    "homepage": "https://github.com/waelio/negotiate#readme",
+    "homepage": "https://waelio.com/packages/@waelio/negotiate",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/waelio/negotiate.git"
@@ -20,6 +20,7 @@
         "app/*.py",
         "scripts/negotiate-npm-cli.mjs",
         "scripts/negotiate_cli.py",
+        "ui/index.html",
         "requirements.txt",
         "pyproject.toml",
         "README.md",
@@ -29,13 +30,18 @@
         "node": ">=20"
     },
     "scripts": {
-        "publish:dry": "npm publish --dry-run"
+        "publish:dry": "npm publish --dry-run --access public"
     },
     "keywords": [
         "ai",
         "negotiation",
+        "multi-agent",
+        "llm",
         "fastapi",
-        "markdown",
-        "cli"
+        "cloudflare-workers",
+        "autonomous",
+        "cli",
+        "session",
+        "markdown"
     ]
 }
