@@ -1,6 +1,6 @@
 {
     "name": "@waelio/negotiate",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "description": "Your real situation — two AIs negotiate what you write. No canned HR demo.",
     "type": "module",
     "license": "MIT",
