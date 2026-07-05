@@ -59,9 +59,9 @@ Base URL: `https://negotiate-api.waelio.workers.dev`
 curl -X POST https://negotiate-api.waelio.workers.dev/negotiate/auto \
   -H "Content-Type: application/json" \
   -d '{
-    "goal": "Salary negotiation: candidate wants $180k, company budget is $150k",
-    "agent_a_persona": "You are a job candidate. Be firm but professional.",
-    "agent_b_persona": "You are an HR manager with a tight budget. Counter professionally."
+    "goal": "YOUR REAL TOPIC — what you are actually negotiating",
+    "agent_a_persona": "YOUR description of Agent A",
+    "agent_b_persona": "YOUR description of Agent B"
   }'
 ```
 

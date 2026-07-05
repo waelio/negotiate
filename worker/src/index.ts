@@ -13,9 +13,12 @@
  *   POST /sessions/:id/handoff                  → save handoff context
  *   GET  /sessions/:id/handoff                  → read handoff context
  *   GET  /sessions                              → list recent sessions (for UI)
+ *   GET  /libraries                             → list reference libraries for negotiations
  *   POST /negotiate/auto                        → fully autonomous AI vs AI negotiation
  *   POST /negotiate/auto/:id/continue           → let Agent B counter-respond
  */
+
+import { listLibraries, resolveLibraries } from "./libraries";
 
 export interface Env {
   SESSIONS: KVNamespace;
@@ -26,19 +29,41 @@ export interface Env {
 
 // ── AI helper ─────────────────────────────────────────────────────────────────
 
+const AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
+
+function extractAiText(result: unknown): string {
+  if (typeof result === "string") {
+    return result.trim();
+  }
+  if (!result || typeof result !== "object") {
+    return "";
+  }
+  const record = result as Record<string, unknown>;
+  if (typeof record.response === "string") {
+    return record.response.trim();
+  }
+  if (record.result && typeof record.result === "object") {
+    const nested = record.result as Record<string, unknown>;
+    if (typeof nested.response === "string") {
+      return nested.response.trim();
+    }
+  }
+  return "";
+}
+
 async function askAgent(
   ai: Ai,
   systemPrompt: string,
   userMessage: string
 ): Promise<string> {
-  const response = await ai.run("@cf/meta/llama-3-8b-instruct", {
+  const result = await ai.run(AI_MODEL, {
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage },
     ],
     max_tokens: 512,
-  }) as { response?: string };
-  return response?.response?.trim() ?? "I accept your terms.";
+  });
+  return extractAiText(result) || "I accept your terms.";
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -89,6 +114,8 @@ interface NegotiationState {
   opening: string;
   history: NegotiationTurn[];
   rounds: number;
+  library_ids?: string[];
+  library_context?: string;
 }
 
 interface AutoNegotiationBody {
@@ -97,6 +124,8 @@ interface AutoNegotiationBody {
   agent_b_persona?: string;
   opening?: string;
   terms?: Partial<NegotiationTerm>[];
+  library_ids?: string[];
+  library_context?: string;
 }
 
 // ── Crypto helpers ────────────────────────────────────────────────────────────
@@ -249,6 +278,20 @@ function buildTermBrief(goal: string, terms: NegotiationTerm[]): string {
   return `Goal: ${goal}\n\nNegotiable terms:\n${termLines}`;
 }
 
+function buildNegotiationBrief(
+  goal: string,
+  terms: NegotiationTerm[],
+  libraryIds?: string[],
+  libraryContext?: string
+): string {
+  const termBrief = buildTermBrief(goal, terms);
+  const { brief: libraryBrief } = resolveLibraries(libraryIds, libraryContext);
+  if (!libraryBrief) {
+    return termBrief;
+  }
+  return `${termBrief}\n\n${libraryBrief}`;
+}
+
 function buildHistoryTranscript(history: NegotiationTurn[]): string {
   if (history.length === 0) {
     return "No previous rounds.";
@@ -294,6 +337,11 @@ export default {
     // GET /health
     if (method === "GET" && path === "/health") {
       return json({ status: "ok" });
+    }
+
+    // GET /libraries — reference libraries for negotiations
+    if (method === "GET" && path === "/libraries") {
+      return json({ libraries: listLibraries() });
     }
 
     // GET /sessions — list recent sessions
@@ -503,7 +551,9 @@ export default {
       const personaB = body.agent_b_persona?.trim() || "You are Agent B, a tough negotiator. Read the proposal and counter-offer or accept. Be concise.";
       const opening = body.opening?.trim() || `Let's negotiate about: ${goal}. I'll start with my opening proposal.`;
       const terms = normalizeTerms(goal, body.terms);
-      const termBrief = buildTermBrief(goal, terms);
+      const libraryIds = body.library_ids ?? [];
+      const libraryContext = body.library_context?.trim();
+      const termBrief = buildNegotiationBrief(goal, terms, libraryIds, libraryContext);
 
       // Create session
       const session_id = randomHex(16);
@@ -562,6 +612,8 @@ Your turn as Agent B: accept only if the offer meets your interests; otherwise c
           },
         ],
         rounds: 1,
+        library_ids: libraryIds.length > 0 ? libraryIds : undefined,
+        library_context: libraryContext || undefined,
       };
       await putSession(env.SESSIONS, session);
 
@@ -569,7 +621,9 @@ Your turn as Agent B: accept only if the offer meets your interests; otherwise c
         session_id,
         updated_at: new Date().toISOString(),
         goal,
-        current_status: "Both agents exchanged concrete opening positions using the editable deal terms.",
+        current_status: libraryIds.length > 0
+          ? "Both agents exchanged opening positions using selected reference libraries."
+          : "Both agents exchanged concrete opening positions using the editable deal terms.",
         last_successful_step: "Agent B responded to Agent A's proposal with a realistic accept/counter decision.",
         current_blocker: "none",
         next_exact_step: `Continue negotiation at POST /negotiate/auto/${session_id}/continue`,
@@ -617,6 +671,8 @@ Your turn as Agent B: accept only if the offer meets your interests; otherwise c
         "You are Agent B. Review Agent A's response and counter or accept. Be concise.";
       const opening = body.opening?.trim() || priorState?.opening || `Continue negotiating about: ${goal}.`;
       const terms = normalizeTerms(goal, body.terms ?? priorState?.terms);
+      const libraryIds = body.library_ids ?? priorState?.library_ids ?? [];
+      const libraryContext = body.library_context?.trim() || priorState?.library_context;
       const history =
         priorState?.history ??
         (session.prompt_a_text || session.prompt_b_text
@@ -630,7 +686,7 @@ Your turn as Agent B: accept only if the offer meets your interests; otherwise c
             ]
           : []);
       const nextRound = history.length + 1;
-      const termBrief = buildTermBrief(goal, terms);
+      const termBrief = buildNegotiationBrief(goal, terms, libraryIds, libraryContext);
       const transcript = buildHistoryTranscript(history);
 
       // Agent A responds to B's last counter
@@ -682,6 +738,8 @@ Your turn as Agent B in round ${nextRound}: accept only if Agent A's terms meet 
         opening,
         history: nextHistory,
         rounds: nextRound,
+        library_ids: libraryIds.length > 0 ? libraryIds : undefined,
+        library_context: libraryContext || undefined,
       };
       await putSession(env.SESSIONS, session);
 

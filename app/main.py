@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from app.storage import MarkdownSessionStore
+from app.libraries import list_libraries
 
 try:
     from google.adk.agents.llm_agent import Agent
@@ -103,6 +104,11 @@ class KickoffNegotiationResponse(BaseModel):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/libraries")
+def get_libraries() -> dict[str, list[dict[str, str]]]:
+    return {"libraries": list_libraries()}
 
 
 @app.post("/sessions", response_model=CreateSessionResponse)
